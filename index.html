@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>사서 주민 위치 기록 매니저</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #0d0f12;
+      color: #e2e8f0;
+      user-select: none;
+    }
+    .mc-card {
+      background: #181b20;
+      border: 2px solid #2d323b;
+      box-shadow: inset -2px -2px 0px rgba(0,0,0,0.4), inset 2px 2px 0px rgba(255,255,255,0.05);
+    }
+    .mc-cell {
+      position: relative;
+      background-color: #121418;
+      border: 2px solid #2a2f38;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+      image-rendering: pixelated;
+    }
+    .mc-cell:hover {
+      border-color: #3b82f6;
+    }
+    
+    /* 셀 + 버튼 */
+    .plus-btn {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      background-color: #2563eb;
+      color: white;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      z-index: 20;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .plus-btn:hover {
+      background-color: #1d4ed8;
+      transform: scale(1.25);
+    }
+    .mc-cell:hover .plus-btn {
+      opacity: 1;
+    }
+    .plus-top { top: -11px; left: calc(50% - 11px); }
+    .plus-bottom { bottom: -11px; left: calc(50% - 11px); }
+    .plus-left { left: -11px; top: calc(50% - 11px); }
+    .plus-right { right: -11px; top: calc(50% - 11px); }
+
+    /* Shift 모드 시각화 */
+    body.shift-mode .mc-cell:hover {
+      border-color: #ef4444 !important;
+      background-color: #3b1215 !important;
+    }
+    body.shift-mode .plus-btn {
+      display: none !important;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <header class="bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-30 shadow-md">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="goLobby()">
+        <div class="w-10 h-10 bg-amber-900/40 border-2 border-amber-500/50 rounded-lg flex items-center justify-center text-amber-400">
+          <i class="fa-solid fa-book text-xl"></i>
+        </div>
+        <h1 class="text-xl font-bold tracking-tight text-zinc-100">사서 주민 위치 기록 매니저</h1>
+      </div>
+
+      <div id="editor-controls" class="hidden flex items-center gap-2">
+        <button onclick="saveCurrentProfile()" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white font-medium text-sm rounded transition flex items-center gap-1.5 shadow">
+          <i class="fa-solid fa-floppy-disk"></i> 저장하기
+        </button>
+        <button onclick="clearCurrentGridItems()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm rounded transition flex items-center gap-1.5 shadow">
+          <i class="fa-solid fa-eraser"></i> 내용 초기화
+        </button>
+        <button onclick="goLobby()" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white font-medium text-sm rounded transition flex items-center gap-1.5 shadow">
+          <i class="fa-solid fa-house"></i> 로비로
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+    <!-- 로비 뷰 -->
+    <div id="lobby-view" class="space-y-6">
+      <div class="border-b border-zinc-800 pb-3">
+        <h2 class="text-2xl font-bold text-amber-400">프로필 목록</h2>
+      </div>
+
+      <div id="profile-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+    </div>
+
+    <!-- 에디터 뷰 -->
+    <div id="editor-view" class="hidden space-y-4">
+      <div class="flex items-center gap-3 bg-zinc-900 p-4 rounded-lg border border-zinc-800">
+        <label class="text-sm font-semibold text-zinc-400 whitespace-nowrap">슬롯 이름:</label>
+        <input type="text" id="profile-title-input" class="bg-zinc-950 border border-zinc-700 rounded px-3 py-1.5 text-amber-300 font-bold text-lg w-full max-w-md focus:outline-none focus:border-amber-500" placeholder="프로필 이름">
+        <span class="text-xs text-zinc-400 ml-auto hidden md:inline">※ 셀 클릭: 편집 / <strong class="text-red-400">Shift + 클릭: 개별 셀 삭제</strong></span>
+      </div>
+
+      <div class="overflow-auto p-8 bg-zinc-950/60 border border-zinc-800 rounded-xl flex items-center justify-center min-h-[500px]">
+        <div id="grid-board" class="inline-grid gap-3 p-4 bg-zinc-900/80 rounded-lg border border-zinc-800/80"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 주민사서 선택 및 수정 모달 -->
+  <div id="item-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-xl max-w-2xl w-full p-6 shadow-2xl space-y-5">
+      
+      <!-- 헤더 -->
+      <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+        <div class="flex items-center gap-2">
+          <button id="modal-back-btn" onclick="backToStep1()" class="hidden text-zinc-400 hover:text-amber-400 mr-1 transition">
+            <i class="fa-solid fa-arrow-left text-lg"></i>
+          </button>
+          <h3 id="modal-title" class="font-bold text-xl text-amber-400">주민사서 선택 및 수정</h3>
+        </div>
+        <button onclick="closeModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-xmark text-2xl"></i></button>
+      </div>
+
+      <!-- STEP 1: 사서 이름 및 장비 선택 -->
+      <div id="modal-step-1" class="space-y-5">
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-zinc-300">사서 이름 / 메모:</label>
+          <input type="text" id="modal-label-input" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-amber-500" placeholder="사서 이름 입력">
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-zinc-300">선택된 인챈트:</label>
+          <div id="selected-enchant-display" class="bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2 text-blue-400 font-bold text-sm min-h-[38px] flex items-center justify-between">
+            <span id="selected-enchant-text">설정 안 됨</span>
+            <button id="clear-enchant-btn" onclick="clearSelectedEnchant()" class="hidden text-xs text-red-400 hover:text-red-300 underline">인챈트 해제</button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-zinc-300">아이콘 선택 (클릭 시 인챈트 설정):</label>
+          <div id="icon-selector" class="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-64 overflow-y-auto p-2 bg-zinc-950/50 rounded-lg border border-zinc-800"></div>
+        </div>
+      </div>
+
+      <!-- STEP 2: 인챈트 종류 및 레벨 상세 선택 -->
+      <div id="modal-step-2" class="hidden space-y-5">
+        <div class="flex items-center gap-3 bg-zinc-950 p-3 rounded-lg border border-zinc-800">
+          <img id="step2-item-icon" src="" class="w-10 h-10 object-contain" style="image-rendering: pixelated;">
+          <div>
+            <h4 id="step2-item-name" class="text-amber-300 font-bold text-lg"></h4>
+            <p class="text-xs text-zinc-400">인챈트 종류와 레벨을 선택하세요.</p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-zinc-300">인챈트 종류 선택:</label>
+          <div id="enchant-type-selector" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto p-2 bg-zinc-950/50 rounded-lg border border-zinc-800"></div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-zinc-300">인챈트 레벨 선택:</label>
+          <div id="enchant-level-selector" class="flex flex-wrap gap-2 p-2 bg-zinc-950/50 rounded-lg border border-zinc-800 min-h-[50px] items-center">
+            <span class="text-xs text-zinc-500">인챈트 종류를 먼저 선택하세요.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 푸터 버튼 -->
+      <div class="flex justify-between items-center pt-3 border-t border-zinc-800">
+        <button onclick="closeModal()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-sm rounded-lg transition">취소</button>
+        <div class="flex gap-2">
+          <button id="step2-confirm-btn" onclick="confirmEnchantSelection()" class="hidden px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm rounded-lg transition">선택 완료</button>
+          <button id="step1-save-btn" onclick="saveModalData()" class="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm rounded-lg transition">확인</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const MC_ICON_URLS = {
+      none: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/barrier.png',
+      diamond_sword: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/diamond_sword.png',
+      diamond_chestplate: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/diamond_chestplate.png',
+      diamond_pickaxe: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/diamond_pickaxe.png',
+      trident: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/trident.png',
+      mace: 'https://minecraft.wiki/images/Mace_JE1_BE1.png',
+      bow: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/bow.png',
+      crossbow: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/crossbow_standby.png',
+      etc: 'https://raw.githubusercontent.com/inventivetalentdev/minecraft-assets/1.20.4/assets/minecraft/textures/item/emerald.png'
+    };
+
+    const ICON_LABELS = {
+      none: '없음', diamond_sword: '검', diamond_chestplate: '갑옷',
+      diamond_pickaxe: '도구', trident: '삼지창', mace: '철퇴',
+      bow: '활', crossbow: '석궁', etc: '기타'
+    };
+
+    const ENCHANT_DATA = {
+      diamond_sword: [
+        { name: '날카로움', max: 5 }, { name: '강타', max: 5 }, { name: '살충', max: 5 },
+        { name: '밀치기', max: 2 }, { name: '발화', max: 2 }, { name: '약탈', max: 3 },
+        { name: '휩쓸기', max: 3 }
+      ],
+      diamond_chestplate: [
+        { name: '보호', max: 4 }, { name: '화염 보호', max: 4 }, { name: '폭발 보호', max: 4 }, { name: '투사체 보호', max: 4 },
+        { name: '호흡', max: 3 }, { name: '친수성', max: 1 }, { name: '가시', max: 3 },
+        { name: '가벼운 착지', max: 4 }, { name: '물갈퀴', max: 3 }, { name: '차가운 걸음', max: 2 }
+      ],
+      diamond_pickaxe: [
+        { name: '효율', max: 5 }, { name: '행운', max: 3 }, { name: '섬세한 손길', max: 1 }
+      ],
+      trident: [
+        { name: '찌르기', max: 5 }, { name: '충성', max: 3 }, { name: '집전', max: 1 }, { name: '급류', max: 3 }
+      ],
+      mace: [
+        { name: '육중', max: 5 }, { name: '돌풍', max: 3 }, { name: '격파', max: 4 }
+      ],
+      bow: [
+        { name: '힘', max: 5 }, { name: '밀어내기', max: 2 }, { name: '화염', max: 1 }, { name: '무한', max: 1 }
+      ],
+      crossbow: [
+        { name: '다중 발사', max: 1 }, { name: '관통', max: 4 }, { name: '빠른 장전', max: 3 }
+      ],
+      etc: [
+        { name: '수선', max: 1 },
+        { name: '내구성', max: 3 },
+        { name: '귀속 저주', max: 1 },
+        { name: '소실 저주', max: 1 }
+      ]
+    };
+
+    const ROMAN_NUMS = ['', 'I', 'II', 'III', 'IV', 'V'];
+
+    let profiles = JSON.parse(localStorage.getItem('mc_librarian_profiles') || '[]');
+    let currentProfileId = null;
+    let editingCellCoords = null;
+    let selectedModalIcon = 'none';
+    let selectedModalEnchant = '';
+
+    let tempSelectedEnchant = null;
+    let tempSelectedLevel = null;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Shift') document.body.classList.add('shift-mode');
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'Shift') document.body.classList.remove('shift-mode');
+    });
+
+    function init() {
+      if (profiles.length === 0) {
+        profiles.push(createDefaultProfile('기본 위치 매핑'));
+        saveProfilesToStorage();
+      }
+      renderLobby();
+    }
+
+    function createDefaultProfile(title) {
+      const activeCells = {};
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          activeCells[`${r},${c}`] = { active: true, icon: 'none', label: '', enchant: '' };
+        }
+      }
+
+      return {
+        id: 'prof_' + Date.now(),
+        title: title || '새 프로필',
+        minR: 0, maxR: 2,
+        minC: 0, maxC: 2,
+        cells: activeCells
+      };
+    }
+
+    function saveProfilesToStorage() {
+      localStorage.setItem('mc_librarian_profiles', JSON.stringify(profiles));
+    }
+
+    function goLobby() {
+      currentProfileId = null;
+      document.getElementById('lobby-view').classList.remove('hidden');
+      document.getElementById('editor-view').classList.add('hidden');
+      document.getElementById('editor-controls').classList.add('hidden');
+      renderLobby();
+    }
+
+    function openEditor(id) {
+      currentProfileId = id;
+      document.getElementById('lobby-view').classList.add('hidden');
+      document.getElementById('editor-view').classList.remove('hidden');
+      document.getElementById('editor-controls').classList.remove('hidden');
+
+      const profile = profiles.find(p => p.id === id);
+      document.getElementById('profile-title-input').value = profile.title;
+      renderGridBoard();
+    }
+
+    function renderLobby() {
+      const container = document.getElementById('profile-list');
+      container.innerHTML = '';
+
+      profiles.forEach(prof => {
+        const card = document.createElement('div');
+        card.className = 'mc-card rounded-xl p-5 cursor-pointer hover:border-amber-500/80 transition relative group flex flex-col justify-between h-36';
+        card.onclick = () => openEditor(prof.id);
+
+        const activeCount = Object.values(prof.cells || {}).filter(c => c && c.active).length;
+
+        card.innerHTML = `
+          <button onclick="deleteProfile(event, '${prof.id}')" class="absolute top-3 right-3 text-zinc-500 hover:text-red-400 p-1.5 rounded transition z-10">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+          <div>
+            <h3 class="font-bold text-lg text-amber-300 pr-6 truncate">${prof.title}</h3>
+          </div>
+          <div class="flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-zinc-800">
+            <span>생성된 셀 개수: <strong class="text-amber-400 font-bold">${activeCount}개</strong></span>
+            <span class="text-amber-500/80">열기 <i class="fa-solid fa-arrow-right"></i></span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      const addCard = document.createElement('div');
+      addCard.className = 'border-2 border-dashed border-zinc-800 hover:border-amber-500/60 rounded-xl p-5 cursor-pointer transition flex flex-col items-center justify-center text-zinc-500 hover:text-amber-400 h-36 gap-2';
+      addCard.onclick = addNewProfile;
+      addCard.innerHTML = `
+        <i class="fa-solid fa-plus text-2xl"></i>
+        <span class="font-semibold text-sm">새 프로필 추가</span>
+      `;
+      container.appendChild(addCard);
+    }
+
+    function addNewProfile() {
+      const newProf = createDefaultProfile(`프로필 ${profiles.length + 1}`);
+      profiles.push(newProf);
+      saveProfilesToStorage();
+      openEditor(newProf.id);
+    }
+
+    function deleteProfile(e, id) {
+      e.stopPropagation();
+      if (profiles.length <= 1) {
+        alert('최소 하나의 프로필은 남아있어야 합니다.');
+        return;
+      }
+      if (confirm('프로필을 삭제하시겠습니까?')) {
+        profiles = profiles.filter(p => p.id !== id);
+        saveProfilesToStorage();
+        renderLobby();
+      }
+    }
+
+    function hasActiveCell(prof, r, c) {
+      const key = `${r},${c}`;
+      return !!(prof.cells[key] && prof.cells[key].active);
+    }
+
+    function renderGridBoard() {
+      const prof = profiles.find(p => p.id === currentProfileId);
+      if (!prof) return;
+
+      const board = document.getElementById('grid-board');
+      const colsCount = prof.maxC - prof.minC + 1;
+      board.style.gridTemplateColumns = `repeat(${colsCount}, minmax(95px, 105px))`;
+      board.innerHTML = '';
+
+      for (let r = prof.minR; r <= prof.maxR; r++) {
+        for (let c = prof.minC; c <= prof.maxC; c++) {
+          const key = `${r},${c}`;
+          const cellData = prof.cells[key];
+
+          if (!cellData || !cellData.active) {
+            const emptySlot = document.createElement('div');
+            emptySlot.className = 'h-32 w-full invisible';
+            board.appendChild(emptySlot);
+            continue;
+          }
+
+          const cell = document.createElement('div');
+          cell.className = `mc-cell h-32 rounded-lg p-1.5 flex flex-col items-center justify-between cursor-pointer`;
+
+          // 1. 위: 사서 이름
+          let labelTag = cellData.label
+            ? `<div class="w-full text-center text-[11px] font-bold text-amber-300 truncate bg-zinc-900/90 px-1 py-0.5 rounded border border-amber-500/30 pointer-events-none">${cellData.label}</div>`
+            : `<div class="w-full text-center text-[10px] text-zinc-600 truncate bg-zinc-900/40 px-1 py-0.5 rounded border border-zinc-800/40 pointer-events-none">이름 없음</div>`;
+
+          // 2. 중간: 아이콘
+          let imgTag = (cellData.icon && cellData.icon !== 'none' && MC_ICON_URLS[cellData.icon])
+            ? `<img src="${MC_ICON_URLS[cellData.icon]}" class="w-8 h-8 object-contain drop-shadow" style="image-rendering: pixelated;" alt="item">`
+            : `<div class="w-8 h-8"></div>`;
+
+          // 3. 아래: 인챈트
+          let enchantTag = cellData.enchant
+            ? `<div class="w-full text-center text-[11px] font-semibold text-blue-400 truncate bg-blue-950/40 px-1 py-0.5 rounded border border-blue-800/50 pointer-events-none">${cellData.enchant}</div>`
+            : `<div class="w-full text-center text-[10px] text-zinc-600 truncate bg-zinc-900/40 px-1 py-0.5 rounded border border-zinc-800/40 pointer-events-none">인챈트 없음</div>`;
+
+          const topBtn = !hasActiveCell(prof, r - 1, c) 
+            ? `<button onclick="addSingleCell(event, ${r}, ${c}, 'top')" class="plus-btn plus-top" title="위쪽에 셀 추가"><i class="fa-solid fa-plus"></i></button>` : '';
+          const bottomBtn = !hasActiveCell(prof, r + 1, c) 
+            ? `<button onclick="addSingleCell(event, ${r}, ${c}, 'bottom')" class="plus-btn plus-bottom" title="아래쪽에 셀 추가"><i class="fa-solid fa-plus"></i></button>` : '';
+          const leftBtn = !hasActiveCell(prof, r, c - 1) 
+            ? `<button onclick="addSingleCell(event, ${r}, ${c}, 'left')" class="plus-btn plus-left" title="왼쪽에 셀 추가"><i class="fa-solid fa-plus"></i></button>` : '';
+          const rightBtn = !hasActiveCell(prof, r, c + 1) 
+            ? `<button onclick="addSingleCell(event, ${r}, ${c}, 'right')" class="plus-btn plus-right" title="오른쪽에 셀 추가"><i class="fa-solid fa-plus"></i></button>` : '';
+
+          cell.innerHTML = `
+            ${topBtn}
+            ${bottomBtn}
+            ${leftBtn}
+            ${rightBtn}
+
+            ${labelTag}
+            <div class="flex-1 flex items-center justify-center pointer-events-none">
+              ${imgTag}
+            </div>
+            ${enchantTag}
+          `;
+
+          cell.onmousedown = (e) => {
+            if (e.shiftKey) {
+              e.preventDefault();
+              e.stopPropagation();
+              deleteSingleCell(r, c);
+            }
+          };
+
+          cell.onclick = (e) => {
+            if (!e.shiftKey) {
+              openCellModal(r, c);
+            }
+          };
+
+          board.appendChild(cell);
+        }
+      }
+    }
+
+    function deleteSingleCell(r, c) {
+      const prof = profiles.find(p => p.id === currentProfileId);
+      if (!prof) return;
+
+      const key = `${r},${c}`;
+      if (prof.cells[key]) {
+        delete prof.cells[key];
+        recalculateBounds(prof);
+        saveProfilesToStorage();
+        renderGridBoard();
+      }
+    }
+
+    function addSingleCell(e, r, c, dir) {
+      e.preventDefault();
+      e.stopPropagation();
+      const prof = profiles.find(p => p.id === currentProfileId);
+      if (!prof) return;
+
+      let targetR = r;
+      let targetC = c;
+
+      if (dir === 'top') targetR = r - 1;
+      else if (dir === 'bottom') targetR = r + 1;
+      else if (dir === 'left') targetC = c - 1;
+      else if (dir === 'right') targetC = c + 1;
+
+      prof.cells[`${targetR},${targetC}`] = { active: true, icon: 'none', label: '', enchant: '' };
+      recalculateBounds(prof);
+      saveProfilesToStorage();
+      renderGridBoard();
+    }
+
+    function recalculateBounds(prof) {
+      const activeKeys = Object.keys(prof.cells).filter(k => prof.cells[k] && prof.cells[k].active);
+      if (activeKeys.length === 0) {
+        prof.minR = 0; prof.maxR = 0;
+        prof.minC = 0; prof.maxC = 0;
+        return;
+      }
+
+      let minR = Infinity, maxR = -Infinity;
+      let minC = Infinity, maxC = -Infinity;
+
+      activeKeys.forEach(k => {
+        const [r, c] = k.split(',').map(Number);
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      });
+
+      prof.minR = minR;
+      prof.maxR = maxR;
+      prof.minC = minC;
+      prof.maxC = maxC;
+    }
+
+    function openCellModal(r, c) {
+      editingCellCoords = { r, c };
+      const prof = profiles.find(p => p.id === currentProfileId);
+      const cellData = prof.cells[`${r},${c}`] || { icon: 'none', label: '', enchant: '' };
+
+      document.getElementById('modal-label-input').value = cellData.label || '';
+      selectedModalIcon = cellData.icon || 'none';
+      selectedModalEnchant = cellData.enchant || '';
+
+      updateEnchantDisplay();
+      backToStep1();
+      renderIconSelector();
+
+      document.getElementById('item-modal').classList.remove('hidden');
+    }
+
+    function updateEnchantDisplay() {
+      const dispText = document.getElementById('selected-enchant-text');
+      const clearBtn = document.getElementById('clear-enchant-btn');
+
+      if (selectedModalEnchant) {
+        dispText.innerText = selectedModalEnchant;
+        dispText.className = 'text-blue-400 font-bold';
+        clearBtn.classList.remove('hidden');
+      } else {
+        dispText.innerText = '설정 안 됨';
+        dispText.className = 'text-zinc-500 font-normal';
+        clearBtn.classList.add('hidden');
+      }
+    }
+
+    function clearSelectedEnchant() {
+      selectedModalEnchant = '';
+      updateEnchantDisplay();
+    }
+
+    function renderIconSelector() {
+      const iconSelector = document.getElementById('icon-selector');
+      iconSelector.innerHTML = '';
+
+      Object.keys(MC_ICON_URLS).forEach(key => {
+        const opt = document.createElement('button');
+        opt.type = 'button';
+        const isSelected = selectedModalIcon === key;
+        opt.className = `flex flex-col items-center justify-center p-2 rounded-lg border ${isSelected ? 'border-amber-400 bg-amber-950/60' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'} transition`;
+        
+        opt.onclick = () => {
+          selectedModalIcon = key;
+          renderIconSelector();
+
+          if (key !== 'none') {
+            goToStep2(key);
+          } else {
+            selectedModalEnchant = '';
+            updateEnchantDisplay();
+          }
+        };
+
+        const imgHtml = `<img src="${MC_ICON_URLS[key]}" class="w-8 h-8 object-contain mb-1" style="image-rendering: pixelated;" alt="${key}">`;
+
+        opt.innerHTML = `
+          <div class="h-9 flex items-center justify-center">
+            ${imgHtml}
+          </div>
+          <span class="text-[11px] text-zinc-300 font-medium">${ICON_LABELS[key]}</span>
+        `;
+        iconSelector.appendChild(opt);
+      });
+    }
+
+    function goToStep2(iconKey) {
+      tempSelectedEnchant = null;
+      tempSelectedLevel = null;
+
+      document.getElementById('modal-step-1').classList.add('hidden');
+      document.getElementById('modal-step-2').classList.remove('hidden');
+
+      document.getElementById('modal-back-btn').classList.remove('hidden');
+      document.getElementById('step1-save-btn').classList.add('hidden');
+      document.getElementById('step2-confirm-btn').classList.remove('hidden');
+
+      document.getElementById('modal-title').innerText = `${ICON_LABELS[iconKey]} - 인챈트 설정`;
+      document.getElementById('step2-item-icon').src = MC_ICON_URLS[iconKey];
+      document.getElementById('step2-item-name').innerText = ICON_LABELS[iconKey];
+
+      renderEnchantTypeSelector(iconKey);
+      renderEnchantLevelSelector(null);
+    }
+
+    function backToStep1() {
+      document.getElementById('modal-step-1').classList.remove('hidden');
+      document.getElementById('modal-step-2').classList.add('hidden');
+
+      document.getElementById('modal-back-btn').classList.add('hidden');
+      document.getElementById('step1-save-btn').classList.remove('hidden');
+      document.getElementById('step2-confirm-btn').classList.add('hidden');
+
+      document.getElementById('modal-title').innerText = '주민사서 선택 및 수정';
+      updateEnchantDisplay();
+    }
+
+    function renderEnchantTypeSelector(iconKey) {
+      const container = document.getElementById('enchant-type-selector');
+      container.innerHTML = '';
+
+      const enchants = ENCHANT_DATA[iconKey] || [];
+
+      enchants.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const isSelected = tempSelectedEnchant && tempSelectedEnchant.name === item.name;
+
+        btn.className = `p-2.5 rounded-lg border text-sm font-medium text-left transition flex justify-between items-center ${
+          isSelected 
+            ? 'border-amber-400 bg-amber-950/70 text-amber-300' 
+            : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'
+        }`;
+
+        btn.onclick = () => {
+          tempSelectedEnchant = item;
+          tempSelectedLevel = (item.max === 1) ? 1 : null;
+          renderEnchantTypeSelector(iconKey);
+          renderEnchantLevelSelector(item);
+        };
+
+        btn.innerHTML = `
+          <span>${item.name}</span>
+          <span class="text-sm text-amber-400 font-bold">최대 ${ROMAN_NUMS[item.max] || item.max}</span>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function renderEnchantLevelSelector(enchantObj) {
+      const container = document.getElementById('enchant-level-selector');
+      container.innerHTML = '';
+
+      if (!enchantObj) {
+        container.innerHTML = `<span class="text-xs text-zinc-500">인챈트 종류를 먼저 선택하세요.</span>`;
+        return;
+      }
+
+      for (let lvl = 1; lvl <= enchantObj.max; lvl++) {
+        const lvlBtn = document.createElement('button');
+        lvlBtn.type = 'button';
+        const isSelected = tempSelectedLevel === lvl;
+
+        lvlBtn.className = `px-4 py-2 rounded-lg border text-sm font-bold transition ${
+          isSelected
+            ? 'border-amber-400 bg-amber-500 text-black'
+            : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-zinc-500'
+        }`;
+
+        lvlBtn.onclick = () => {
+          tempSelectedLevel = lvl;
+          renderEnchantLevelSelector(enchantObj);
+        };
+
+        lvlBtn.innerText = `${enchantObj.name} ${ROMAN_NUMS[lvl] || lvl}`;
+        container.appendChild(lvlBtn);
+      }
+    }
+
+    function confirmEnchantSelection() {
+      if (!tempSelectedEnchant) {
+        alert('인챈트 종류를 선택하세요.');
+        return;
+      }
+      if (!tempSelectedLevel) {
+        alert('인챈트 레벨을 선택하세요.');
+        return;
+      }
+
+      selectedModalEnchant = `${tempSelectedEnchant.name} ${ROMAN_NUMS[tempSelectedLevel] || tempSelectedLevel}`;
+
+      backToStep1();
+    }
+
+    function closeModal() {
+      document.getElementById('item-modal').classList.add('hidden');
+      editingCellCoords = null;
+    }
+
+    function saveModalData() {
+      if (!editingCellCoords) return;
+      const prof = profiles.find(p => p.id === currentProfileId);
+      const { r, c } = editingCellCoords;
+      const labelVal = document.getElementById('modal-label-input').value.trim();
+
+      prof.cells[`${r},${c}`] = { 
+        active: true, 
+        icon: selectedModalIcon, 
+        label: labelVal,
+        enchant: selectedModalEnchant
+      };
+
+      saveProfilesToStorage();
+      closeModal();
+      renderGridBoard();
+    }
+
+    function clearCurrentGridItems() {
+      if (confirm('현재 프로필의 모든 셀을 초기화(기본 3x3)하시겠습니까?')) {
+        const prof = profiles.find(p => p.id === currentProfileId);
+        const resetProf = createDefaultProfile(prof.title);
+        prof.minR = resetProf.minR;
+        prof.maxR = resetProf.maxR;
+        prof.minC = resetProf.minC;
+        prof.maxC = resetProf.maxC;
+        prof.cells = resetProf.cells;
+
+        saveProfilesToStorage();
+        renderGridBoard();
+      }
+    }
+
+    function saveCurrentProfile() {
+      const prof = profiles.find(p => p.id === currentProfileId);
+      const titleVal = document.getElementById('profile-title-input').value.trim();
+      if (titleVal) prof.title = titleVal;
+      saveProfilesToStorage();
+      alert('성공적으로 저장되었습니다!');
+    }
+
+    document.getElementById('profile-title-input').addEventListener('change', (e) => {
+      const prof = profiles.find(p => p.id === currentProfileId);
+      if (prof && e.target.value.trim()) {
+        prof.title = e.target.value.trim();
+        saveProfilesToStorage();
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
